@@ -284,6 +284,25 @@ addEndpoint = function() {
                          method = "POST",
                          handler = .executeSynchronous,
                          filter = TRUE)
+  
+  Session$createEndpoint(
+    path = "/download/list",
+    method = "GET",
+    handler = function(req, res) {
+      shared_dir <- Sys.getenv("SHARED_TEMP_DIR", tempdir())
+      files <- list.files(shared_dir)
+      return(list(files = files))
+    }
+  )
+
+  Session$createEndpoint(
+    path = "/download/{filename}",
+    method = "GET",
+    handler = function(filename, req, res) {
+      message("Download requested for filename: ", filename)
+      return(download(filename, res))
+    }
+  )
 
 # assign data collection
   Session$assignData(sentinel_s2_l2a_cogs)
@@ -318,8 +337,13 @@ addEndpoint = function() {
   Session$assignProcess(divide)
   Session$assignProcess(evi)
 # assign ml processes
+  Session$assignProcess(ml_fit)
   Session$assignProcess(ml_predict)
+  Session$assignProcess(mlm_random_forest)
+  Session$assignProcess(preprocess_training_set)
+  Session$assignProcess(mlm_class_tempcnn)
   Session$assignProcess(save_ml_model)
-
-
+  Session$assignProcess(mlm_svm_process)
+  Session$assignProcess(mlm_xgboost_process)
+  Session$assignProcess(load_ml_model)
 }
