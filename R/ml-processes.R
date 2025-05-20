@@ -74,34 +74,34 @@ ensure_python_env <- function(required_modules = c("numpy", "onnxruntime", "torc
   }, error = function(e) FALSE)
 
   if (py_valid) {
-    message("✅ Gültige Python-Umgebung erkannt: ", py_config()$python)
+    message("Gültige Python-Umgebung erkannt: ", py_config()$python)
     use_virtualenv("r-reticulate", required = TRUE)
   } else {
-    message("⚠️ Keine gültige Python-Umgebung gefunden – automatischer Aufbau beginnt...")
+    message("Keine gültige Python-Umgebung gefunden – automatischer Aufbau beginnt...")
 
     if (!miniconda_exists()) {
-      message("📦 Miniconda wird installiert...")
+      message("Miniconda wird installiert...")
       install_miniconda()
     }
 
     if ("r-reticulate" %in% virtualenv_list()) {
-      message("♻️ Alte r-reticulate-Umgebung wird entfernt...")
+      message("Alte r-reticulate-Umgebung wird entfernt...")
       virtualenv_remove("r-reticulate", confirm = FALSE)
     }
 
-    message("🛠️ Neue Python-Umgebung wird erstellt...")
+    message("Neue Python-Umgebung wird erstellt...")
     virtualenv_create("r-reticulate", python = "python3")
     use_virtualenv("r-reticulate", required = TRUE)
   }
 
   for (mod in required_modules) {
     if (!py_module_available(mod)) {
-      message("📦 Installiere fehlendes Python-Modul: ", mod)
+      message("Installiere fehlendes Python-Modul: ", mod)
       py_install(mod, pip = TRUE)
     }
   }
 
-  message("✅ Python-Setup abgeschlossen: ", py_config()$python)
+  message("Python-Setup abgeschlossen: ", py_config()$python)
 }
 
 
@@ -1031,8 +1031,7 @@ ml_predict <- Process$new(
 
     # Funktion für ONNX-Vorhersagen bei einem einzigen Zeitschritt (apply_pixel)
     mlm_single_onnx <- function(data_cube, model) {
-      ensure_python_env()
-
+      ensure_python_env(required_modules = c("numpy", "onnxruntime", "torch"))
       message("Preparing ONNX prediction (single time step) using apply_pixel()...")
       tmp <- Sys.getenv("SHARED_TEMP_DIR", tempdir())
 
@@ -1133,6 +1132,7 @@ ml_predict <- Process$new(
     }
 
     mlm_multi_onnx <- function(data_cube, model) {
+      ensure_python_env(required_modules = c("numpy", "onnxruntime", "torch"))
       message("Preparing ONNX prediction (multiple time steps) using apply_time()...")
       tmp <- Sys.getenv("SHARED_TEMP_DIR", tempdir())
 
@@ -1241,40 +1241,29 @@ ml_predict <- Process$new(
       return(time_steps)
     }
 
-
     #######################################
     time <- time_steps_query(cube)
-
     message("ml_pedict starting...")
-
-
-
     if (is.raw(model)) {
       message("RAW model recognized - try to determine type")
-
       model <- tryCatch({
         model_obj <- readRDS(tmp_file)
         message("RAW was a .rds model - model loaded.")
         con_rds <- rawConnection(model_obj, "rb")
         model <- torch::torch_load(con_rds)
-
       }, error = function(e) {
         tmp_file <- tempfile(fileext = ".onnx")
         writeBin(model, tmp_file)
         message("No .rds recognized - treat as .onnx: ", tmp_file)
         return(tmp_file)
-
-
       })
-
     }
-
     if (is.list(model) && !is.null(model$onnx) && endsWith(model$onnx, ".onnx")) {
       message("Model provided as list – using ONNX: ", model$onnx)
       model <- model$onnx
     }
 
-    time <- time_steps_query(cube)
+    #time <- time_steps_query(cube)
     band_info <- gdalcubes::bands(cube)
     band_names <- band_info$name
     cube_dimensions <- gdalcubes::dimensions(cube)
@@ -1313,15 +1302,12 @@ ml_predict <- Process$new(
           con_rds <- rawConnection(model_obj, "rb")
           model <- torch::torch_load(con_rds)
         }
-
         else if (inherits(model_obj, "train")) {
           message("Caret model recognized")
           model <- model_obj
-
         } else {
           stop("Unknown model type in .rds - no nn_module, no caret model, no Torch state_dict")
         }
-
       }else {
         stop("Unsupported model format")
       }
