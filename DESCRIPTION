@@ -1,12 +1,16 @@
 Package: openeocubes
 Type: Package
 Title: OpenEO Compliant R Backend
-Version: 1.0.0
+Version: 1.1.0
 Authors@R:
     person(given = "Brian",
            family = "Pondi",
            role = c("aut", "cre"),
            email = "brian.pondi@uni-muenster.de")
+    person(given = "Jonas",
+           family = "Starke",
+           role = c("cre"),
+           email = "jstarke@uni-muenster.de")
 Description: openeocubes operates as an openEo-compliant back-end interfacing gdalcubes as the main data cube.
 License: MIT + file LICENSE
 Encoding: UTF-8
@@ -25,18 +29,29 @@ Imports:
     useful,
     gdalcubes,
     rstac,
-    geojsonsf, 
-    torch, 
-    caret
+    geojsonsf,
+    torch,
+    caret,
+    kernlab,
+    readr,
+    reticulate,
+    xgboost,
+    randomForest,
+    terra,
+    stats,
+    abind,
+    tidyr,
+    httr,
+    clue
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.3.2
+RoxygenNote: 7.3.3
 Collate: 
     'api_process_graphs.R'
     'api_job.R'
     'Parameter-class.R'
     'Process-class.R'
-    'processes-ml.R'
     'processes-cube.R'
+    'processes-ml.R'
     'processes-math.R'
     'Router.R'
     'api.R'

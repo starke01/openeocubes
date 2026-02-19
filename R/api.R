@@ -2,39 +2,52 @@
 #' @import gdalcubes
 #' @include Session-Class.R
 #' @include Router.R
-#' @include math-processes.R
+#' @include processes-math.R
 #' @include processes-ml.R
-#' @include processes.R
+#' @include processes-cube.R
 #' @include api_job.R
 #' @include api_process_graphs.R
 NULL
 
-# Capabilities handler
-.capabilities = function() {
+
+
+
+.capabilities = function(req, res) {
   
-  config = Session$getConfig()
+  res$setHeader("Content-Type", "application/json; charset=utf-8")
+  
+  config    = Session$getConfig()
   endpoints = Session$getEndpoints()
   
-  endpoints = endpoints %>% group_by(path) %>% summarise(
-    paths=list(tibble(path,method) %>% (function(x,...){
-      return(list(path=unique(x$path),methods=as.list(x$method)))
-    })))
+  endpoints = endpoints %>% 
+    group_by(path) %>% 
+    summarise(
+      paths = list(
+        tibble(path, method) %>% (function(x, ...) {
+          list(
+            path    = unique(x$path),
+            methods = as.list(x$method)
+          )
+        })
+      )
+    )
   
-  list = list()
-  list$api_version = config$api_version
-  list$backend_version = config$backend_version
-  list$stac_version = config$stac_version
-  list$id = config$id
-  list$title = config$title
-  list$description = config$description
-  list$endpoints = endpoints$paths
-  list$links = list(list(
+  out = list()
+  out$api_version = config$api_version
+  out$backend_version = config$backend_version
+  out$stac_version = config$stac_version
+  out$id = config$id
+  out$title = config$title
+  out$description = config$description
+  out$endpoints = endpoints$paths
+  out$links = list(list(
     rel = "self",
-    href = paste(config$base_url, "", sep = "/")))
+    href = paste(config$base_url, "", sep = "/")
+  ))
   
-  return(list)
-  
+  return(out)
 }
+
 
 .well_known = function() {
   
@@ -46,170 +59,199 @@ NULL
   version$versions = obj
   
   return(version)
-  
-  
 }
 
-.file_formats = function() {
-  
-  config = Session$getConfig()
-  
-  list = list()
-  list$output = config$outputFormats
-  list$input = config$inputFormats
-  
+.file_formats <- function() {
+  config <- Session$getConfig()
+
+  list <- list()
+  list$output <- config$outputFormats
+  list$input <- config$inputFormats
+
   return(list)
 }
 
-.conformance = function() {
-  
-  list = list()
-  list$conformsTo = list(Session$getConfig()$OGC_conformanceLink)
-  
+.conformance <- function() {
+  list <- list()
+  list$conformsTo <- list(Session$getConfig()$OGC_conformanceLink)
+
   return(list)
 }
 
-.collections = function() {
-  tryCatch({
-    collections = list(collections = unname(lapply(Session$data, function(x) {
-      return(x$collectionInfo())
-    })))
-    collections$links = list(list(
-      rel = "self",
-      href = paste(Session$getConfig()$base_url, "collections", sep = "/")
-    ))
-    
-    return(collections)
-  },error = handleError)
+.collections <- function() {
+  tryCatch(
+    {
+      collections <- list(collections = unname(lapply(Session$data, function(x) {
+        return(x$collectionInfo())
+      })))
+      collections$links <- list(list(
+        rel = "self",
+        href = paste(Session$getConfig()$base_url, "collections", sep = "/")
+      ))
+
+      return(collections)
+    },
+    error = handleError
+  )
 }
 
-.collectionId = function(req, res, collection_id) {
-  tryCatch({
-    return (Session$data[[collection_id]]$collectionInfoExtended())
-  }, error = handleError)
+.collectionId <- function(req, res, collection_id) {
+  tryCatch(
+    {
+      return(Session$data[[collection_id]]$collectionInfoExtended())
+    },
+    error = handleError
+  )
 }
 
-.processes = function() {
+.processes <- function() {
   message("processes at api.R called")
-  tryCatch({
-    processes = list(processes = unname(lapply(Session$processes, function(process){
-      return(process$processInfo())
-    })))
-    
-    processes$links = list(list(
-      rel = "self",
-      href = paste(Session$getConfig()$base_url, "processes", sep = "/")
-    ))
-    
-    return(processes)
-  }, error = handleError)
+  tryCatch(
+    {
+      processes <- list(processes = unname(lapply(Session$processes, function(process) {
+        return(process$processInfo())
+      })))
+
+      processes$links <- list(list(
+        rel = "self",
+        href = paste(Session$getConfig()$base_url, "processes", sep = "/")
+      ))
+
+      return(processes)
+    },
+    error = handleError
+  )
 }
 
-.login_basic = function(req, res) {
+.login_basic <- function(req, res) {
   # GDAL parameters to make accessing COGs on AWS faster
   gdalcubes::gdalcubes_options(parallel = 8) # depends on the system
   gdalcubes::gdalcubes_set_gdal_config("VSI_CACHE", "TRUE")
-  gdalcubes::gdalcubes_set_gdal_config("GDAL_CACHEMAX","20%")
-  gdalcubes::gdalcubes_set_gdal_config("VSI_CACHE_SIZE","5000000")
-  gdalcubes::gdalcubes_set_gdal_config("GDAL_HTTP_MULTIPLEX","YES")
+  gdalcubes::gdalcubes_set_gdal_config("GDAL_CACHEMAX", "20%")
+  gdalcubes::gdalcubes_set_gdal_config("VSI_CACHE_SIZE", "5000000")
+  gdalcubes::gdalcubes_set_gdal_config("GDAL_HTTP_MULTIPLEX", "YES")
   message("GDAL commands set up to speed CoG calls")
-  gdalcubes::gdalcubes_set_gdal_config("GDAL_INGESTED_BYTES_AT_OPEN","32000")
-  gdalcubes::gdalcubes_set_gdal_config("GDAL_DISABLE_READDIR_ON_OPEN","EMPTY_DIR")
-  gdalcubes::gdalcubes_set_gdal_config("GDAL_HTTP_VERSION","2")
-  gdalcubes::gdalcubes_set_gdal_config("GDAL_HTTP_MERGE_CONSECUTIVE_RANGES","YES")
+  gdalcubes::gdalcubes_set_gdal_config("GDAL_INGESTED_BYTES_AT_OPEN", "32000")
+  gdalcubes::gdalcubes_set_gdal_config("GDAL_DISABLE_READDIR_ON_OPEN", "EMPTY_DIR")
+  gdalcubes::gdalcubes_set_gdal_config("GDAL_HTTP_VERSION", "2")
+  gdalcubes::gdalcubes_set_gdal_config("GDAL_HTTP_MERGE_CONSECUTIVE_RANGES", "YES")
   message("log in from api.R called")
-  auth = req$HTTP_AUTHORIZATION
-  encoded = substr(auth,7,nchar(auth))
-  decoded = rawToChar(base64enc::base64decode(encoded))
-  user_name = unlist(strsplit(decoded,":"))[1]
-  user_pwd = unlist(strsplit(decoded,":"))[2]
-  
-  tryCatch({
-    config = Session$getConfig()
-    if(user_name != config$user && user_pwd != config$password) {
-      throwError("CredentialsInvalid")
-    }
-    token = "b34ba2bdf9ac9ee1"
-    Session$setToken(token)
-    
-    return(list(access_token = token))
-  },
-  error = handleError)
+  auth <- req$HTTP_AUTHORIZATION
+  encoded <- substr(auth, 7, nchar(auth))
+  decoded <- rawToChar(base64enc::base64decode(encoded))
+  user_name <- unlist(strsplit(decoded, ":"))[1]
+  user_pwd <- unlist(strsplit(decoded, ":"))[2]
+
+  tryCatch(
+    {
+      config <- Session$getConfig()
+      if (user_name != config$user && user_pwd != config$password) {
+        throwError("CredentialsInvalid")
+      }
+      token <- "b34ba2bdf9ac9ee1"
+      Session$setToken(token)
+
+      return(list(access_token = token))
+    },
+    error = handleError
+  )
 }
 
 .authorized = function(req, res) {
   tryCatch({
-    auth = req$HTTP_AUTHORIZATION
-    sub = substr(auth,15,nchar(auth))
-    token = Session$getToken()
-    
-    if (is.null(auth)) {
+    path   <- if (!is.null(req$PATH_INFO)) req$PATH_INFO else "/"
+    method <- if (!is.null(req$REQUEST_METHOD)) req$REQUEST_METHOD else "GET"
+
+    is_jobs_root <- identical(path, "/jobs") && method %in% c("GET", "POST")
+    is_jobs_id <- grepl("^/jobs/[^/]+$", path) && identical(method, "GET")
+
+    if (!(is_jobs_root || is_jobs_id)) {
+      return(forward())
+    }
+
+    auth <- req$HTTP_AUTHORIZATION
+    if (is.null(auth) || !nzchar(auth)) {
       throwError("AuthenticationRequired")
     }
-    else if (sub != token) {
+
+    sub <- substr(auth, 15, nchar(auth))
+    token <- Session$getToken()
+
+    if (sub != token) {
       res$status <- 403
-      list(error="AuthenticationFailed")
+      return(list(error = "AuthenticationFailed"))
     }
-    else {
-      forward()
-    }
+
+    forward()
   }, error = handleError)
 }
 
+.executeSynchronous <- function(req, res) {
+  tryCatch(
+    {
+      sent_job <- jsonlite::fromJSON(req$rook.input$read_lines(), simplifyDataFrame = FALSE)
+      process_graph <- sent_job$process
+      newJob <- Job$new(process = process_graph)
 
-.executeSynchronous = function(req, res) {
-  tryCatch({
-    sent_job = jsonlite::fromJSON(req$rook.input$read_lines(),simplifyDataFrame = FALSE)
-    process_graph = sent_job$process
-    newJob = Job$new(process = process_graph)
-    
-    job = newJob$run()
-    format = job$output
-    
-    if (class(format) == "list") {
-      if (format$title == "Network Common Data Form") {
-        file = gdalcubes::write_ncdf(job$results)
+      job <- newJob$run()
+      format <- job$output
+
+      if (class(format) == "list") {
+        if (format$title == "Network Common Data Form") {
+          file <- gdalcubes::write_ncdf(job$results)
+        } else if (format$title == "GeoTiff") {
+          file <- gdalcubes::write_tif(job$results)
+        } else {
+          throwError("FormatUnsupported")
+        }
+      } else {
+        if (format == "NetCDF") {
+          file <- gdalcubes::write_ncdf(job$results)
+        } else if (format == "GTiff") {
+          file <- gdalcubes::write_tif(job$results)
+        } else {
+          throwError("FormatUnsupported")
+        }
       }
-      else if (format$title == "GeoTiff") {
-        file = gdalcubes::write_tif(job$results)
-      }
-      else {
-        throwError("FormatUnsupported")
-      }
-    }
-    else {
-      if (format == "NetCDF") {
-        file = gdalcubes::write_ncdf(job$results)
-      }
-      else if (format == "GTiff") {
-        file = gdalcubes::write_tif(job$results)
-      }
-      else {
-        throwError("FormatUnsupported")
-      }
-    }
-    
-    first = file[1]
-    res$status = 200
-    res$body = readBin(first, "raw", n = file.info(first)$size)
-    content_type = plumber:::getContentType(tools::file_ext(first))
-    res$setHeader("Content-Type", content_type)
-    
-    return(res)
-  },error=handleError)
+
+      first <- file[1]
+      res$status <- 200
+      res$body <- readBin(first, "raw", n = file.info(first)$size)
+      content_type <- plumber:::getContentType(tools::file_ext(first))
+      res$setHeader("Content-Type", content_type)
+
+      return(res)
+    },
+    error = handleError
+  )
 }
 
-.cors_filter = function(req,res) {
+.cors_filter <- function(req, res) {
   res$setHeader("Access-Control-Allow-Origin", req$HTTP_ORIGIN)
-  res$setHeader("Access-Control-Expose-Headers", "Location, OpenEO-Identifier, OpenEO-Costs")
+  res$setHeader("Access-Control-Expose-Headers", "Link, Location, OpenEO-Costs, OpenEO-Identifier")
   forward()
 }
 
-.cors_option = function(req,res, ...) {
-  res$setHeader("Access-Control-Allow-Headers", "Content-Type")
-  res$setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS,PATCH")
-  res$status = 204
+.cors_option = function(req, res, ...) {
+  res$setHeader("Access-Control-Allow-Origin", "*")
+  res$setHeader(
+    "Access-Control-Expose-Headers",
+    "Link, Location, OpenEO-Costs, OpenEO-Identifier"
+  )
+  
+  res$setHeader(
+    "Access-Control-Allow-Headers",
+    "Authorization, Content-Type"
+  )
+  
+  res$setHeader(
+    "Access-Control-Allow-Methods",
+    "GET,POST,PUT,DELETE,OPTIONS,PATCH"
+  )
+  
+  res$status <- 204
 }
+
 
 #' dedicate the handler functions to the corresponding paths
 addEndpoint = function() {
@@ -233,6 +275,17 @@ addEndpoint = function() {
   Session$createEndpoint(path = "/collections",
                          method = "GET",
                          handler = .collections)
+
+  Session$createEndpoint(path = "/collections",
+                         method = "OPTIONS",
+                         handler = .cors_option,
+                         filter = FALSE)
+  
+  Session$createEndpoint(path = "/collections",
+                         method = "OPTIONS",
+                         handler = .cors_option,
+                         filter = FALSE)
+  
   
   Session$createEndpoint(path = "/collections/{collection_id}",
                          method = "GET",
@@ -285,25 +338,57 @@ addEndpoint = function() {
                          handler = .executeSynchronous,
                          filter = TRUE)
   
-  Session$createEndpoint(
-    path = "/download/list",
-    method = "GET",
-    handler = function(req, res) {
-      shared_dir <- Sys.getenv("SHARED_TEMP_DIR", tempdir())
-      files <- list.files(shared_dir)
-      return(list(files = files))
+Session$createEndpoint(
+  path = "/download/list",
+  method = "GET",
+  handler = function(req, res) {
+    shared_dir <- Sys.getenv("SHARED_TEMP_DIR", tempdir())
+    files <- list.files(shared_dir)
+
+    tifs <- files[grepl("\\.tif(f)?$", files, ignore.case = TRUE)]
+    pred <- "prediction.tif"
+    if (!pred %in% files && length(tifs) >= 1) {
+      file.copy(
+        from = file.path(shared_dir, tifs[1]),
+        to = file.path(shared_dir, pred),
+        overwrite = TRUE
+      )
     }
-  )
-  
+    files <- list.files(shared_dir)
+    files <- files[!grepl("^cube_.*\\.tif(f)?$", files, ignore.case = TRUE)]
+    return(list(files = files))
+  }
+)
+
+
   Session$createEndpoint(
     path = "/download/{filename}",
     method = "GET",
-    handler = function(filename, req, res) {
+    handler = function(req, res, filename) {
       message("Download requested for filename: ", filename)
-      return(download(filename, res))
+      tryCatch({
+        return(download(filename, res))
+      }, error = function(e) {
+        err <- handleError(e)
+        res$status <- 500
+        res$setHeader("Content-Type", "application/json; charset=utf-8")
+        res$body <- charToRaw(jsonlite::toJSON(err, auto_unbox = TRUE))
+        return(res)
+      })
     }
   )
-  
+
+  Session$createEndpoint(
+  path = "/favicon.ico",
+  method = "GET",
+  handler = function(req, res) {
+    res$status <- 204
+    return(res)
+  },
+  filter = FALSE
+  )
+
+
   # assign data collection
   Session$assignData(sentinel_s2_l2a_cogs)
   Session$assignData(sentinel_s2_l2a)
@@ -352,4 +437,5 @@ addEndpoint = function() {
   Session$assignProcess(mlm_class_mlp)
   Session$assignProcess(mlm_class_lighttae)
   Session$assignProcess(mlm_class_stgf)
+  Session$assignProcess(load_stac_ml)
 }
